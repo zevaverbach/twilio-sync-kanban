@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Twilio Sync Kanban</title>
+        <meta charset="utf-8">
+        <script src="https://media.twiliocdn.com/sdk/js/sync/v0.8/twilio-sync.min.js"></script>
+    </head>
+    <body>
+        <div id="list"></div>
+        <script>
+            let syncClient
+            let listItems = []
+
+            const setupTwilioClient = async () => {
+                try {
+                    const response = await fetch('http://localhost:5001/token')
+                    const responseJson = await response.json()
+                    const token = responseJson.token
+                    syncClient = new Twilio.Sync.Client(token, { logLevel: 'info' })
+                } catch (e) {
+                    console.log(e)
+                }
+                syncClient.on('connectionStateChanged', state => {
+                    if (state != 'connected') {
+                        console.log(`Sync is not live (websocket connection ${state})`)
+                    } else {
+                        console.log('Sync is live!')
+                    }
+                })
+                const getItems = async listName => {
+                    const list = await syncClient.list(listName)
+                    const items = await list.getItems()
+                    console.log(items)
+                    listItems = items.items.map(item => item.data)
+                }
+                getItems()
+                console.log(listItems)
+            }
+
+            window.onload = setupTwilioClient()
+        </script>
+    </body>
+</html>
