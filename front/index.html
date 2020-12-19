@@ -6,10 +6,9 @@
         <script src="https://media.twiliocdn.com/sdk/js/sync/v0.8/twilio-sync.min.js"></script>
     </head>
     <body>
-        <div id="list"></div>
+        <div id="todos"></div>
         <script>
             let syncClient
-            let listItems = []
 
             const setupTwilioClient = async () => {
                 try {
@@ -27,14 +26,18 @@
                         console.log('Sync is live!')
                     }
                 })
-                const getItems = async listName => {
-                    const list = await syncClient.list(listName)
-                    const items = await list.getItems()
-                    console.log(items)
-                    listItems = items.items.map(item => item.data)
-                }
-                getItems()
-                console.log(listItems)
+                const list = await syncClient.list('todos')
+                // await list.push({name: 'buy milk'})
+                // await list.push({name: 'write blog post'})
+                const items = await list.getItems()
+                console.log(items)
+                const listDiv = document.getElementById('todos')
+                items.items.forEach(item => {
+                    const itemDiv = document.createElement('div') 
+                    itemDiv.className = "todo-item"
+                    itemDiv.innerText = item.data.value.name
+                    listDiv.appendChild(itemDiv)
+                })
             }
 
             window.onload = setupTwilioClient()
