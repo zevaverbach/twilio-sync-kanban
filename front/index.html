@@ -4,24 +4,27 @@
         <title>Twilio Sync Kanban</title>
         <meta charset="utf-8">
         <script src="https://media.twiliocdn.com/sdk/js/sync/v0.8/twilio-sync.min.js"></script>
+        <style>
+          div { margin: .5em; }
+          span { padding: .5em; }
+        </style>
     </head>
     <body>
-        <form onsubmit="addTodo(event)">
-          <input id="todo-input" type=text name=todo />
+        <form onsubmit="addItem(event, 'todos')">
+          <input id="todo-input" type=text name=todos />
           <input type=submit />
         </form>
         <div id="todos"></div>
         <script>
-            let syncClient
+            let syncClient, removeList, updateItem, deleteItem
 
-            const addTodo = async event => {
+            const addItem = async (event, listName) => {
                 event.preventDefault()
-                newToDoField = event.target.elements.todo
-                const newTodo = newToDoField.value
-                console.log(newTodo)
-                newToDoField.value = ''
-                const todos = await syncClient.list('todos')
-                todos.push({name: newTodo})
+                const newItemField = event.target.elements[listName]
+                const newItem = newItemField.value
+                newItemField.value = ''
+                const list = await syncClient.list(listName)
+                list.push({name: newItem})
             }
 
             const setupTwilioClient = async () => {
@@ -40,21 +43,57 @@
                         console.log('Sync is live!')
                     }
                 })
+
+                removeList = async listName => {
+                  const list = await syncClient.list(listName)
+                  return list.removeList()
+                }
+
+                deleteItem = async (listName, index) => {
+                  const list = await syncClient.list(listName)
+                  list.remove(index)
+                }
+
                 const todos = await syncClient.list('todos')
                 const items = await todos.getItems()
                 const todosDiv = document.getElementById('todos')
                 items.items.forEach(item => {
-                    const itemDiv = document.createElement('div') 
-                    itemDiv.className = "todo-item"
-                    itemDiv.innerText = item.data.value.name
-                    todosDiv.appendChild(itemDiv)
+                    const { data } = item
+                    const containerDiv = document.createElement('div')
+                    containerDiv.className = "todo-item"
+                    containerDiv.dataset.index = data.index
+                    const itemSpan = document.createElement('span') 
+                    itemSpan.innerText = data.value.name
+                    containerDiv.appendChild(itemSpan)
+                    
+                    const deleteButton = document.createElement('button')
+                    deleteButton.innerText = "delete"
+                    deleteButton.addEventListener('click', () => deleteItem('todos', data.index))
+                    containerDiv.appendChild(deleteButton)
+
+                    todosDiv.appendChild(containerDiv)
                 })
 
                 todos.on('itemAdded', item => {
-                    const itemDiv = document.createElement('div') 
-                    itemDiv.className = "todo-item"
-                    itemDiv.innerText = item.item.data.value.name
-                    todosDiv.appendChild(itemDiv)
+                    const data = item.item.data
+                    const containerDiv = document.createElement('div')
+                    containerDiv.className = "todo-item"
+                    containerDiv.dataset.index = data.index
+                    const itemSpan = document.createElement('span') 
+                    itemSpan.innerText = data.value.name
+                    containerDiv.appendChild(itemSpan)
+                    
+                    const deleteButton = document.createElement('button')
+                    deleteButton.innerText = "delete"
+                    deleteButton.addEventListener('click', () => deleteItem('todos', data.index))
+                    containerDiv.appendChild(deleteButton)
+
+                    todosDiv.appendChild(containerDiv)
+                })
+
+                todos.on('itemRemoved', item => {
+                    const itemDiv = document.querySelector(`.todo-item[data-index="${item.index}"`) 
+                    itemDiv.remove()
                 })
             }
 
