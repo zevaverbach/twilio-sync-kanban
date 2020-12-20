@@ -14,13 +14,13 @@
         </style>
     </head>
     <body>
-        <form onsubmit="addItem(event, 'todos')">
+        <form onsubmit="addItem(event)">
           <input id="todo-input" type=text name=todos />
           <input type=submit />
         </form>
         <div id="kanban-container"></div>
         <script>
-            let syncClient, removeList, updateItem, deleteItem
+            let syncClient, removeList, updateItem, deleteItem, list
 
             const board = new jKanban({
                 element: "#kanban-container",
@@ -41,15 +41,27 @@
                         "title" : "done",          
                     },
                 ],
+                dropEl: async (el, target, source) => {
+                    const sourceId = source.parentElement.dataset.id
+                    const targetId = target.parentElement.dataset.id
+                    if (sourceId === targetId) {
+                        return
+                    }
+                    const itemId = el.dataset.eid
+                    const name = el.innerText
+                    updateItem(itemId, {name, list: targetId})
+                }
             })
 
-            const addItem = async (event, listName) => {
+            updateItem = async (uid, value) => list.set(uid, value)
+            deleteItem = async index => list.remove(index)
+
+            const addItem = async event => {
                 event.preventDefault()
-                const newItemField = event.target.elements[listName]
+                const newItemField = event.target.elements.todos
                 const newItem = newItemField.value
                 newItemField.value = ''
-                const list = await syncClient.list(listName)
-                list.push({name: newItem})
+                list.push({name: newItem, list: 'todo'})
             }
 
             const setupTwilioClient = async () => {
@@ -71,46 +83,54 @@
                     }
                 })
 
-                deleteItem = async (listName, index) => {
-                  const list = await syncClient.list(listName)
-                  list.remove(index)
-                }
+                list = await syncClient.list('todos')
 
-                const todos = await syncClient.list('todos')
-                const items = await todos.getItems()
+                const items = await list.getItems()
                 items.items.forEach(item => {
-                    // id title class
                     const { data } = item
-                    board.addElement("todo", {
-                      id: data.index,
-                      title: (
-                        `<span>${data.value.name}</span>`
-                        + `<svg onclick="deleteItem('todos', ${data.index})" xmlns="http://www.w3.org/2000/svg" height=15 width=15 style="cursor: pointer; vertical-align: top;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>`
-                        ),
-                      class: "card",
-                      drag: el => el.classList.add('dragging'),
-                      dragend: el => el.classList.remove('dragging'),
+                    board.addElement(data.value.list, {
+                        id: data.index,
+                        title: (
+                          `<span>${data.value.name}</span>`
+                          + `<svg onclick="deleteItem(${data.index})" xmlns="http://www.w3.org/2000/svg" height=15 width=15 style="cursor: pointer; vertical-align: top;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>`
+                          ),
+                        class: "card",
+                        drag: el => el.classList.add('dragging'),
+                        dragend: el => el.classList.remove('dragging'),
                     })
                 })
 
-                todos.on('itemAdded', item => {
+                list.on('itemAdded', item => {
                     const data = item.item.data
-                    board.addElement("todo", {
+                    board.addElement(data.value.list, {
                     id: data.index, 
                     title: (
-                      `<span>${data.value.name}</span>`
-                      + `<svg onclick="deleteItem('todos', ${data.index})" xmlns="http://www.w3.org/2000/svg" height=15 width=15 style="cursor: pointer; vertical-align: top;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>`
-                      ),
+                        `<span>${data.value.name}</span>`
+                        + `<svg onclick="deleteItem(${data.index})" xmlns="http://www.w3.org/2000/svg" height=15 width=15 style="cursor: pointer; vertical-align: top;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>`
+                        ),
                     class: "card",
                     drag: el => el.classList.add('dragging'),
                     dragend: el => el.classList.remove('dragging'),
                     })
                 })
-                todos.on('itemRemoved', item => board.removeElement(item.index.toString()))
+
+                list.on('itemUpdated', ({ item }) => {
+                    const id = item.index.toString()
+                    const element = board.findElement(id)
+                    board.removeElement(id)
+                    board.addElement(item.value.list, {id,
+                        'title': element.innerHTML,
+                        class: "card",
+                        drag: el => el.classList.add('dragging'),
+                        dragend: el => el.classList.remove('dragging'),
+                    })
+                })
+
+              list.on('itemRemoved', ({index}) => board.removeElement(index.toString()))
             }
 
             window.onload = setupTwilioClient()
