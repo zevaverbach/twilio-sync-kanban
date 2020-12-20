@@ -4,9 +4,13 @@
         <title>Twilio Sync Kanban</title>
         <meta charset="utf-8">
         <script src="https://media.twiliocdn.com/sdk/js/sync/v0.8/twilio-sync.min.js"></script>
+        <script src="jkanban.min.js"></script>
+        <link rel="stylesheet" href="jkanban.min.css">
         <style>
-          div { margin: .5em; }
+          form { margin: 1em; }
           span { padding: .5em; }
+          [data-class=card]:hover { cursor: grab }
+          .dragging { cursor: grabbing !important }
         </style>
     </head>
     <body>
@@ -14,9 +18,30 @@
           <input id="todo-input" type=text name=todos />
           <input type=submit />
         </form>
-        <div id="todos"></div>
+        <div id="kanban-container"></div>
         <script>
             let syncClient, removeList, updateItem, deleteItem
+
+            const board = new jKanban({
+                element: "#kanban-container",
+                gutter: "10px",
+                widthBoard: "350px",
+                dragBoards: false,
+                boards: [
+                    {
+                        "id": "todo",           
+                        "title" : "todo",          
+                    },
+                    {
+                        "id": "doing",           
+                        "title" : "doing",          
+                    },
+                    {
+                        "id": "done",           
+                        "title" : "done",          
+                    },
+                ],
+            })
 
             const addItem = async (event, listName) => {
                 event.preventDefault()
@@ -29,7 +54,9 @@
 
             const setupTwilioClient = async () => {
                 try {
-                    const response = await fetch('http://localhost:5001/token')
+                    // note: You will probably have to change the IP address here to your machine's IP.
+                    //   here's a guide for that: https://www.avast.com/c-how-to-find-ip-address
+                    const response = await fetch('http://192.168.178.25:5001/token')
                     const responseJson = await response.json()
                     const token = responseJson.token
                     syncClient = new Twilio.Sync.Client(token, { logLevel: 'info' })
@@ -44,11 +71,6 @@
                     }
                 })
 
-                removeList = async listName => {
-                  const list = await syncClient.list(listName)
-                  return list.removeList()
-                }
-
                 deleteItem = async (listName, index) => {
                   const list = await syncClient.list(listName)
                   list.remove(index)
@@ -56,45 +78,39 @@
 
                 const todos = await syncClient.list('todos')
                 const items = await todos.getItems()
-                const todosDiv = document.getElementById('todos')
                 items.items.forEach(item => {
+                    // id title class
                     const { data } = item
-                    const containerDiv = document.createElement('div')
-                    containerDiv.className = "todo-item"
-                    containerDiv.dataset.index = data.index
-                    const itemSpan = document.createElement('span') 
-                    itemSpan.innerText = data.value.name
-                    containerDiv.appendChild(itemSpan)
-                    
-                    const deleteButton = document.createElement('button')
-                    deleteButton.innerText = "delete"
-                    deleteButton.addEventListener('click', () => deleteItem('todos', data.index))
-                    containerDiv.appendChild(deleteButton)
-
-                    todosDiv.appendChild(containerDiv)
+                    board.addElement("todo", {
+                      id: data.index,
+                      title: (
+                        `<span>${data.value.name}</span>`
+                        + `<svg onclick="deleteItem('todos', ${data.index})" xmlns="http://www.w3.org/2000/svg" height=15 width=15 style="cursor: pointer; vertical-align: top;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>`
+                        ),
+                      class: "card",
+                      drag: el => el.classList.add('dragging'),
+                      dragend: el => el.classList.remove('dragging'),
+                    })
                 })
 
                 todos.on('itemAdded', item => {
                     const data = item.item.data
-                    const containerDiv = document.createElement('div')
-                    containerDiv.className = "todo-item"
-                    containerDiv.dataset.index = data.index
-                    const itemSpan = document.createElement('span') 
-                    itemSpan.innerText = data.value.name
-                    containerDiv.appendChild(itemSpan)
-                    
-                    const deleteButton = document.createElement('button')
-                    deleteButton.innerText = "delete"
-                    deleteButton.addEventListener('click', () => deleteItem('todos', data.index))
-                    containerDiv.appendChild(deleteButton)
-
-                    todosDiv.appendChild(containerDiv)
+                    board.addElement("todo", {
+                    id: data.index, 
+                    title: (
+                      `<span>${data.value.name}</span>`
+                      + `<svg onclick="deleteItem('todos', ${data.index})" xmlns="http://www.w3.org/2000/svg" height=15 width=15 style="cursor: pointer; vertical-align: top;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>`
+                      ),
+                    class: "card",
+                    drag: el => el.classList.add('dragging'),
+                    dragend: el => el.classList.remove('dragging'),
+                    })
                 })
-
-                todos.on('itemRemoved', item => {
-                    const itemDiv = document.querySelector(`.todo-item[data-index="${item.index}"`) 
-                    itemDiv.remove()
-                })
+                todos.on('itemRemoved', item => board.removeElement(item.index.toString()))
             }
 
             window.onload = setupTwilioClient()
